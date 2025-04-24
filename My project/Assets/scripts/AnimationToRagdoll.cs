@@ -4,72 +4,66 @@ using UnityEngine;
 public class AnimationToRagdoll : MonoBehaviour
 {
     [SerializeField] Collider myCollider;
-    [SerializeField] float respawnTime = 30f;
+    [SerializeField] float ragdollTime = 3f;
     Rigidbody[] rigidbodies;
-    bool bIsRagdoll = false;
+    bool isRagdoll = false;
+    Animator animator;
 
     void Start()
     {
         rigidbodies = GetComponentsInChildren<Rigidbody>();
-        ToggleRagdoll(true);
+        animator = GetComponent<Animator>();
+        SetRagdollActive(false); // começa animando
+        animator.Play("Walk_F"); // inicia andando
     }
 
     private void OnCollisionEnter(Collision collision)
     {
-        Debug.Log($"Colisão detectada com: " + $"{collision.gameObject.name}" + $"- tag: {collision.gameObject.tag} - bIsRagdoll: " + $"{bIsRagdoll}");
-
-        // só ativa ragdoll se AINDA estiver animando
-        if (collision.gameObject.CompareTag("Projectile") && !bIsRagdoll)
+        if (collision.gameObject.CompareTag("Projectile") && !isRagdoll)
         {
-            Debug.Log("Colidiu com projetil!");
-            ToggleRagdoll(false);
-            StartCoroutine(GetBackUp());
+            Debug.Log("NPC atingido!");
+
+            // Prende o projétil no corpo
+            ContactPoint contact = collision.contacts[0];
+            collision.transform.position = contact.point;
+            collision.transform.SetParent(contact.otherCollider.transform);
+
+            if (collision.rigidbody != null)
+                collision.rigidbody.isKinematic = true;
+
+            // Ativa ragdoll
+            SetRagdollActive(true);
+            StartCoroutine(RecoverFromRagdoll());
         }
     }
 
-    private IEnumerator GetBackUp() 
+    private IEnumerator RecoverFromRagdoll()
     {
-        yield return new WaitForSeconds(respawnTime);
-        ToggleRagdoll(true);
+        yield return new WaitForSeconds(ragdollTime);
 
+        // Desativa ragdoll e volta a animar
+        SetRagdollActive(false);
+
+        // Inicia a sequência de animações
+        animator.Play("Hit_F_2");
+        yield return new WaitForSeconds(1.5f); // tempo da animação de impacto
+
+        animator.Play("HumanM@Talk01");
+        yield return new WaitForSeconds(2f);
+
+        animator.Play("HumanM@Run01_Forward");
+
+        // Permite ser atingido novamente
+        isRagdoll = false;
     }
 
-    private void ToggleRagdoll(bool bisAnimating)
+    private void SetRagdollActive(bool state)
     {
-        bIsRagdoll = !bisAnimating;
-        myCollider.enabled = bisAnimating;
+        isRagdoll = state;
+        animator.enabled = !state;
+        myCollider.enabled = !state;
 
-        foreach (Rigidbody ragdollBone in rigidbodies)
-        {
-            Debug.Log($"{ragdollBone.name} isKinematic = {ragdollBone.isKinematic}");
-        }
-
-        foreach (Rigidbody ragdollBone in rigidbodies)
-        {
-            ragdollBone.isKinematic = bisAnimating;
-        }
-
-        GetComponent<Animator>().enabled = bisAnimating;
-        if (bisAnimating)
-        {
-            RandomAnimation();
-        }
-    }
-
-    void RandomAnimation()
-    {
-        int randomNum = UnityEngine.Random.Range(0, 2);
-        Debug.Log(randomNum);
-        Animator animator = GetComponent<Animator>();
-
-        if (randomNum == 0)
-        {
-            animator.SetTrigger("Walk");
-        }
-        else
-        {
-            animator.SetTrigger("Idle");
-        }
-
+        foreach (Rigidbody rb in rigidbodies)
+            rb.isKinematic = !state;
     }
 }
